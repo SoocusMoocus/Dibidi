@@ -1,15 +1,18 @@
-import os  # Required for environment variables
+import os
 from telegram.ext import Updater, CommandHandler
 
+BOT_TOKEN = os.getenv('BOT_TOKEN')  # Gets token from environment variables
+
 def start(update, context):
-    update.message.reply_text("Bot is online! ✅")
+    update.message.reply_text("Hello! I'm your bot!")
 
-BOT_TOKEN = os.getenv("8195681425:AAEB_otmC1cT_vw4FW9xKo8VuNqkPt95UBc")  # Get from Render env vars
-if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN not set in environment variables!")
-
-updater = Updater(BOT_TOKEN, use_context=True)
-updater.dispatcher.add_handler(CommandHandler('start', start))
-updater.start_polling()
-print("Bot started polling...")
-updater.idle()
+if __name__ == '__main__':
+    if not BOT_TOKEN:
+        print("Error: BOT_TOKEN not set in environment!")
+        exit(1)
+        
+    updater = Updater(BOT_TOKEN)
+    updater.dispatcher.add_handler(CommandHandler('start', start))
+    print("Bot starting...")
+    updater.start_polling()
+    updater.idle()
