@@ -13,6 +13,7 @@ from telegram.ext import (
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 DATA_FILE = 'user_data.json'
 
+# Initialize data storage
 def load_data():
     try:
         with open(DATA_FILE, 'r') as f:
@@ -39,19 +40,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     help_text = (
         "🐕 Бобожир Бот 🐕\n"
-        "Доступные команды:\n"
+        "Команды:\n"
         "/dig - Выкопать собаку\n"
         "/sell - Продать собаку (3-5 таблеток)\n"
-        "/pill - Использовать таблетку\n"
+        "/pill - Использовать таблетку (покажет DIBIL)\n"
         "/stats - Ваша статистика\n"
         "/top - Топ копателей\n"
-        "/dibil - Показать DIBIL\n"
-        "/help - Показать это сообщение"
+        "/help - Помощь"
     )
     await update.message.reply_text(help_text)
-
-async def show_commands(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await start(update, context)
 
 async def dig_dog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -95,9 +92,19 @@ async def use_pill(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data['users'][user_id]['pills'] > 0:
         data['users'][user_id]['pills'] -= 1
         save_data(data)
+        
+        # Show DIBIL image
+        try:
+            await update.message.reply_photo(
+                photo=InputFile('DIBIL.jpg'),
+                caption="Вы использовали таблетку! 💊"
+            )
+        except Exception as e:
+            print(f"Error sending image: {e}")
+            await update.message.reply_text("💊 Таблетка использована (изображение недоступно)")
+        
         await update.message.reply_text(
-            f"Таблетка использована! 💊\n"
-            f"Осталось: {data['users'][user_id]['pills']}"
+            f"Осталось таблеток: {data['users'][user_id]['pills']}"
         )
     else:
         await update.message.reply_text("У вас нет таблеток!")
@@ -133,31 +140,25 @@ async def show_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(leaderboard)
 
-async def show_dibil(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        await update.message.reply_photo(
-            photo=InputFile('DIBIL.jpg'),
-            caption="Смотри какой DIBIL!"
-        )
-    except FileNotFoundError:
-        await update.message.reply_text("DIBIL куда-то убежал...")
-
 if __name__ == '__main__':
+    # Verify DIBIL.jpg exists
+    if not os.path.exists('DIBIL.jpg'):
+        print("Warning: DIBIL.jpg not found in current directory!")
+        print("Current files:", os.listdir())
+    
     if not BOT_TOKEN:
         print("Error: BOT_TOKEN not set!")
         exit(1)
     
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # Регистрируем обработчики команд
+    # Command handlers
     application.add_handler(CommandHandler(["start", "help"], start))
-    application.add_handler(CommandHandler("commands", show_commands))
     application.add_handler(CommandHandler("dig", dig_dog))
     application.add_handler(CommandHandler("sell", sell_dog))
     application.add_handler(CommandHandler("pill", use_pill))
     application.add_handler(CommandHandler("stats", show_stats))
     application.add_handler(CommandHandler("top", show_top))
-    application.add_handler(CommandHandler("dibil", show_dibil))
     
-    print("Bot starting...")
+    print("Bot starting... Checking files:", os.listdir())
     application.run_polling()
