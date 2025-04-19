@@ -12,8 +12,8 @@ from telegram.ext import (
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 DATA_FILE = 'user_data.json'
+PILL_IMAGE = 'DIBIL.png'  # Changed to PNG
 
-# Initialize data storage
 def load_data():
     try:
         with open(DATA_FILE, 'r') as f:
@@ -50,40 +50,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(help_text)
 
-async def dig_dog(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    data = load_data()
-    user_id = str(user.id)
-    
-    if user_id not in data['users']:
-        await start(update, context)
-        return
-    
-    data['users'][user_id]['dug_count'] += 1
-    data['total_dug'] += 1
-    save_data(data)
-    await update.message.reply_text(f"Собака выкопана! 🐕 (Всего: {data['users'][user_id]['dug_count']})")
-
-async def sell_dog(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    data = load_data()
-    user_id = str(user.id)
-    
-    if data['users'][user_id]['dug_count'] > 0:
-        data['users'][user_id]['dug_count'] -= 1
-        data['users'][user_id]['sold_count'] += 1
-        data['total_sold'] += 1
-        pills_gained = random.randint(3, 5)
-        data['users'][user_id]['pills'] += pills_gained
-        save_data(data)
-        await update.message.reply_text(
-            f"Собака продана! 💰 Получено {pills_gained} таблеток.\n"
-            f"Таблеток: {data['users'][user_id]['pills']}\n"
-            f"Собак осталось: {data['users'][user_id]['dug_count']}"
-        )
-    else:
-        await update.message.reply_text("У вас нет собак для продажи!")
-
 async def use_pill(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     data = load_data()
@@ -93,15 +59,19 @@ async def use_pill(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data['users'][user_id]['pills'] -= 1
         save_data(data)
         
-        # Show DIBIL image
+        # PNG version with enhanced error handling
         try:
-            await update.message.reply_photo(
-                photo=InputFile('DIBIL.jpg'),
-                caption="Вы использовали таблетку! 💊"
-            )
+            if os.path.exists(PILL_IMAGE):
+                await update.message.reply_photo(
+                    photo=InputFile(PILL_IMAGE),
+                    caption="💊 Таблетка активирована! Вот DIBIL:"
+                )
+            else:
+                await update.message.reply_text(
+                    f"Ошибка: {PILL_IMAGE} не найден в:\n{os.listdir()}"
+                )
         except Exception as e:
-            print(f"Error sending image: {e}")
-            await update.message.reply_text("💊 Таблетка использована (изображение недоступно)")
+            await update.message.reply_text(f"Ошибка отправки изображения: {str(e)}")
         
         await update.message.reply_text(
             f"Осталось таблеток: {data['users'][user_id]['pills']}"
@@ -109,56 +79,23 @@ async def use_pill(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("У вас нет таблеток!")
 
-async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    data = load_data()
-    user_id = str(user.id)
-    
-    stats_message = (
-        f"📊 Ваша статистика:\n"
-        f"Выкопали собак: {data['users'][user_id]['dug_count']}\n"
-        f"Продано собак: {data['users'][user_id]['sold_count']}\n"
-        f"Таблеток: {data['users'][user_id]['pills']}\n"
-        f"Всего выкопано: {data['total_dug']}\n"
-        f"Всего продано: {data['total_sold']}"
-    )
-    await update.message.reply_text(stats_message)
-
-async def show_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    data = load_data()
-    users = data['users']
-    
-    top_diggers = sorted(
-        users.items(),
-        key=lambda item: item[1]['dug_count'],
-        reverse=True
-    )[:10]
-    
-    leaderboard = "🏆 Топ копателей:\n"
-    for i, (user_id, user_data) in enumerate(top_diggers, 1):
-        leaderboard += f"{i}. {user_data['username']}: {user_data['dug_count']} собак\n"
-    
-    await update.message.reply_text(leaderboard)
+# [Keep all other functions exactly the same as in previous version: dig_dog, sell_dog, show_stats, show_top]
 
 if __name__ == '__main__':
-    # Verify DIBIL.jpg exists
-    if not os.path.exists('DIBIL.jpg'):
-        print("Warning: DIBIL.jpg not found in current directory!")
-        print("Current files:", os.listdir())
-    
+    # PNG-specific verification
+    print("Starting bot... Checking for PNG file:")
+    if not os.path.exists(PILL_IMAGE):
+        print(f"⚠️ Warning: {PILL_IMAGE} not found! Current files:")
+        print(os.listdir())
+    else:
+        print(f"✅ {PILL_IMAGE} found! Size: {os.path.getsize(PILL_IMAGE)/1024:.1f} KB")
+
     if not BOT_TOKEN:
         print("Error: BOT_TOKEN not set!")
         exit(1)
     
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # Command handlers
-    application.add_handler(CommandHandler(["start", "help"], start))
-    application.add_handler(CommandHandler("dig", dig_dog))
-    application.add_handler(CommandHandler("sell", sell_dog))
-    application.add_handler(CommandHandler("pill", use_pill))
-    application.add_handler(CommandHandler("stats", show_stats))
-    application.add_handler(CommandHandler("top", show_top))
+    # [Keep all handler registrations the same]
     
-    print("Bot starting... Checking files:", os.listdir())
     application.run_polling()
