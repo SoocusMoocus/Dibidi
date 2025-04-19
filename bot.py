@@ -1,7 +1,7 @@
 import os
 import json
 import random
-from telegram import Update, InputFile
+from telegram import Update
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -12,14 +12,24 @@ from telegram.ext import (
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 DATA_FILE = 'user_data.json'
-PILL_IMAGE = 'DIBIL.png'  # Changed to PNG
+
+# Possible pill outcomes
+PILL_RESULTS = [
+    "КОПАЙ",
+    "ЛИСИЧКА",
+    "ТРУБА",
+    "ПАХАЙ",
+    "БОБОЖИР",
+    "ШАНТРАПА",
+    "ГАВНОЖИР"
+]
 
 def load_data():
     try:
         with open(DATA_FILE, 'r') as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        return {'users': {}, 'total_dug': 0, 'total_sold': 0}
+        return {'users': {}, 'total_dug': 0, 'total_sold': 0, 'pills_used': 0}
 
 def save_data(data):
     with open(DATA_FILE, 'w') as f:
@@ -34,7 +44,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             'dug_count': 0,
             'sold_count': 0,
             'pills': 0,
-            'username': user.username or user.first_name
+            'username': user.username or user.first_name,
+            'pills_used': 0
         }
         save_data(data)
     
@@ -43,7 +54,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Команды:\n"
         "/dig - Выкопать собаку\n"
         "/sell - Продать собаку (3-5 таблеток)\n"
-        "/pill - Использовать таблетку (покажет DIBIL)\n"
+        "/pill - Использовать таблетку (случайный эффект)\n"
         "/stats - Ваша статистика\n"
         "/top - Топ копателей\n"
         "/help - Помощь"
@@ -57,45 +68,52 @@ async def use_pill(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if data['users'][user_id]['pills'] > 0:
         data['users'][user_id]['pills'] -= 1
+        data['users'][user_id]['pills_used'] += 1
+        data['pills_used'] += 1
         save_data(data)
         
-        # PNG version with enhanced error handling
-        try:
-            if os.path.exists(PILL_IMAGE):
-                await update.message.reply_photo(
-                    photo=InputFile(PILL_IMAGE),
-                    caption="💊 Таблетка активирована! Вот DIBIL:"
-                )
-            else:
-                await update.message.reply_text(
-                    f"Ошибка: {PILL_IMAGE} не найден в:\n{os.listdir()}"
-                )
-        except Exception as e:
-            await update.message.reply_text(f"Ошибка отправки изображения: {str(e)}")
-        
+        # Get random result
+        result = random.choice(PILL_RESULTS)
         await update.message.reply_text(
+            f"💊 Вам выпал: {result}\n"
             f"Осталось таблеток: {data['users'][user_id]['pills']}"
         )
     else:
         await update.message.reply_text("У вас нет таблеток!")
 
-# [Keep all other functions exactly the same as in previous version: dig_dog, sell_dog, show_stats, show_top]
+async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    data = load_data()
+    user_id = str(user.id)
+    
+    stats_message = (
+        f"📊 Ваша статистика:\n"
+        f"Выкопали собак: {data['users'][user_id]['dug_count']}\n"
+        f"Продано собак: {data['users'][user_id]['sold_count']}\n"
+        f"Таблеток: {data['users'][user_id]['pills']}\n"
+        f"Использовано таблеток: {data['users'][user_id]['pills_used']}\n"
+        f"Всего выкопано: {data['total_dug']}\n"
+        f"Всего продано: {data['total_sold']}\n"
+        f"Всего таблеток использовано: {data['pills_used']}"
+    )
+    await update.message.reply_text(stats_message)
+
+# [Keep dig_dog(), sell_dog(), and show_top() functions unchanged from previous versions]
 
 if __name__ == '__main__':
-    # PNG-specific verification
-    print("Starting bot... Checking for PNG file:")
-    if not os.path.exists(PILL_IMAGE):
-        print(f"⚠️ Warning: {PILL_IMAGE} not found! Current files:")
-        print(os.listdir())
-    else:
-        print(f"✅ {PILL_IMAGE} found! Size: {os.path.getsize(PILL_IMAGE)/1024:.1f} KB")
-
     if not BOT_TOKEN:
         print("Error: BOT_TOKEN not set!")
         exit(1)
     
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # [Keep all handler registrations the same]
+    # Command handlers
+    application.add_handler(CommandHandler(["start", "help"], start))
+    application.add_handler(CommandHandler("dig", dig_dog))
+    application.add_handler(CommandHandler("sell", sell_dog))
+    application.add_handler(CommandHandler("pill", use_pill))
+    application.add_handler(CommandHandler("stats", show_stats))
+    application.add_handler(CommandHandler("top", show_top))
     
+    print("Bot started with text-only pill system")
     application.run_polling()
